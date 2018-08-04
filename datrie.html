@@ -1,0 +1,554 @@
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>lpeng22t.github.io by lpeng22t</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h2 class="project-name">An Implementation of Double-Array Trie</h2>
+    </section>
+    <section class="main-content">
+      <h3><a href="https://linux.thai.net/~thep/datrie/datrie.html">原文链接</a></h3>
+      <hr>
+      <div>
+        <h2>目录</h2>
+        <ol>
+          <li> <a href="#What">什么是Trie?</a>
+          <li> <a href="#WhatTake">What Does It Take to Implement a Trie?</a>
+          <li> <a href="#Tripple">Tripple-Array Trie</a>
+          <li> <a href="#Double">Double-Array Trie</a>
+          <li> <a href="#Suffix">Suffix Compression</a>
+          <li> <a href="#Insert">Key Insertion</a>
+          <li> <a href="#Delete">Key Deletion</a>
+          <li> <a href="#Alloc">Double-Array Pool Allocation</a>
+          <li> <a href="#AnImp">An Implementation</a>
+        </ol>
+<a name="What">
+<h2>What is Trie?</h2>
+</a>
+
+<p><strong>Trie</strong> is a kind of digital search tree. (See
+<a href="#Ref_Knuth1972">[Knuth1972]</a> for the detail of digital search tree.)
+<a href="#Ref_Fredkin1960">[Fredkin1960]</a> introduced the <cite>trie</cite>
+terminology, which is abbreviated from "Re<i>trie</i>val".</p>
+
+<p><img src="trie1.gif" alt="Trie Example"></p>
+
+<p>Trie is an efficient indexing method. It is indeed also a kind of
+deterministic finite automaton (DFA) (See <a href="#Ref_Cohen">[Cohen1990]</a>,
+for example, for the definition of DFA). Within the tree structure, each node
+corresponds to a DFA state, each (directed) labeled edge from a parent node to
+a child node corresponds to a DFA transition. The traversal starts at the root
+node. Then, from head to tail, one by one character in the key string is taken
+to determine the next state to go. The edge labeled with the same character is
+chosen to walk. Notice that each step of such walking consumes one character
+from the key and descends one step down the tree. If the key is exhausted and
+a leaf node is reached, then we arrive at the exit for that key. If we get
+stuck at some node, either because there is no branch labeled with the current
+character we have or because the key is exhausted at an internal node, then
+it simply implies that the key is not recognized by the trie.</p>
+
+<p>Notice that the time needed to traverse from the root to the leaf is not
+dependent on the size of the database, but is proportional to the length of
+the key. Therefore, it is usually much faster than B-tree or any
+comparison-based indexing method in general cases. Its time complexity is
+comparable with hashing techniques.</p>
+
+<p>In addition to the efficiency, trie also provides flexibility in searching
+for the closest path in case that the key is misspelled. For example, by
+skipping a certain character in the key while walking, we can fix the insertion
+kind of typo. By walking toward all the immediate children of one node without
+consuming a character from the key, we can fix the deletion typo, or even
+substitution typo if we just drop the key character that has no branch to go
+and descend to all the immediate children of the current node.</p>
+
+<a name="WhatTake">
+<h2>What Does It Take to Implement a Trie?</h2>
+</a>
+
+<p>In general, a DFA is represented with a <cite>transition table</cite>, in
+which the rows correspond to the states, and the columns correspond to the
+transition labels. The data kept in each cell is then the next state to go for
+a given state when the input is equal to the label.</p>
+
+<p>This is an efficient method for the traversal, because every transition
+can be calculated by two-dimensional array indexing. However, in term of space
+usage, this is rather extravagant, because, in the case of trie, most nodes
+have only a few branches, leaving the majority of the table cells blanks.</p>
+
+<p>Meanwhile, a more compact scheme is to use a linked list to store the
+transitions out of each state. But this results in slower access, due to
+the linear search.</p>
+
+<p>Hence, table compression techniques which still allows fast access have
+been devised to solve the problem.</p>
+
+<ol>
+  <li> <strong><a href="#Ref_Johnson1975">[Johnson1975]</a></strong>
+       (Also explained in <a href="#Ref_Aho+1985">[Aho+1985]</a> pp. 144-146)
+       represented DFA with four arrays, which can be simplified to three
+       in case of trie. The transition table rows are allocated in overlapping
+       manner, allowing the free cells to be used by other rows.
+  <li> <strong><a href="#Ref_Aoe1989">[Aoe1989]</a></strong>
+       proposed an improvement from the three-array structure by reducing
+       the arrays to two.
+</ol>
+
+<a name="Tripple">
+<h2>Tripple-Array Trie</h2>
+</a>
+
+<p>As explained in <a href="#Ref_Aho+1985">[Aho+1985]</a> pp. 144-146, a DFA
+compression could be done using four linear arrays, namely <cite>default</cite>,
+<cite>base</cite>, <cite>next</cite>, and <cite>check</cite>. However, in
+a case simpler than the lexical analyzer, such as the mere trie for information
+retrieval, the <cite>default</cite> array could be omitted. Thus, a trie
+can be implemented using three arrays according to this scheme.</p>
+
+<h3>Structure</h3>
+
+<p>The tripple-array structure is composed of:</p>
+<ol>
+  <li> <b><i>base</i></b>. Each element in <cite>base</cite> corresponds to a
+       node of the trie. For a trie node <cite>s</cite>,
+       <cite>base</cite>[<cite>s</cite>] is the starting
+       index within the <cite>next</cite> and <cite>check</cite> pool (to be
+       explained later) for the row of the node <cite>s</cite> in the
+       transition table.
+  <li> <b><i>next</i></b>. This array, in coordination with <cite>check</cite>,
+       provides a pool for the allocation of the sparse vectors for the rows
+       in the trie transition table. The vector data, that is, the vector of
+       transitions from every node, would be stored in this array.
+  <li> <b><i>check</i></b>. This array works in parallel to <cite>next</cite>.
+       It marks the owner of every cell in <cite>next</cite>. This allows the
+       cells next to one another to be allocated to different trie nodes.
+       That means the sparse vectors of transitions from more than one 
+       node are allowed to be overlapped.
+</ol>
+
+<div class="definition">
+<p><strong>Definition 1.</strong> For a transition from state <cite>s</cite> to
+<cite>t</cite> which takes character <cite>c</cite> as the input, the condition
+maintained in the tripple-array trie is:</p>
+<blockquote>
+  <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]
+    = <cite>s</cite><br>
+  <cite>next</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]
+    = <cite>t</cite>
+</blockquote>
+</div>
+
+<p><img src="tripple.gif" alt="Tripple-Array Structure"></p>
+
+<h3>Walking</h3>
+
+<p>According to <strong>definition 1</strong>, the walking algorithm for a
+given state <cite>s</cite> and the input character <cite>c</cite> is:</p>
+
+<div class="pseudocode">  <cite>t</cite> := <cite>base</cite>[<cite>s</cite>] + <cite>c</cite>;<br>
+  <b><i>if</i></b> <cite>check</cite>[<cite>t</cite>] = <cite>s</cite> <b><i>then</i></b>
+      <cite>next state</cite> := <cite>next</cite>[<cite>t</cite>]
+  <b><i>else</i></b>
+      <cite>fail</cite>
+  <b><i>endif</i></b>
+</div>
+
+<h3>Construction</h3>
+
+<p>To insert a transition that takes character <cite>c</cite> to traverse
+from a state <cite>s</cite> to another state <cite>t</cite>, the cell
+<cite>next</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]]
+must be managed to be available. If it is already vacant, we are lucky.
+Otherwise, either the entire transition vector for the current owner of the
+cell or that of the state <cite>s</cite> itself must be relocated. The
+estimated cost for each case could determine which one to move. After finding
+the free slots to place the vector, the transition vector must be
+recalculated as follows. Assuming the new place begins at <cite>b</cite>,
+the procedure for the relocation is:</p>
+
+<div class="pseudocode"><b><i>Procedure</i></b> <cite>Relocate</cite>(<cite>s</cite> : <b><i>state</i></b>; <cite>b</cite> : <b><i>base_index</i></b>)
+<span class="comment">{ Move base for state <cite>s</cite> to a new place beginning at <cite>b</cite> }</span>
+<b><i>begin</i></b>
+    <b><i>foreach</i></b> input character <cite>c</cite> for the state <cite>s</cite>
+    <span class="comment">{ i.e. foreach <cite>c</cite> such that <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]] = <cite>s</cite> }</span>
+    <b><i>begin</i></b>
+        <cite>check</cite>[<cite>b</cite> + <cite>c</cite>] := <cite>s</cite>;     <span class="comment">{ mark owner }</span>
+        <cite>next</cite>[<cite>b</cite> + <cite>c</cite>] := <cite>next</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>];     <span class="comment">{ copy data }</span>
+        <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>] := <b><i>none</i></b>     <span class="comment">{ free the cell }</span>
+    <b><i>end</i></b>;
+    <cite>base</cite>[<cite>s</cite>] := <cite>b</cite>
+<b><i>end</i></b>
+</div>
+
+<p><img src="tripreloc.gif" alt="Tripple-Array Relocation" /></p>
+
+<a name="Double">
+<h2>Double-Array Trie</h2>
+</a>
+
+<p>The tripple-array structure for implementing trie appears to be well defined,
+but is still not practical to keep in a single file. The
+<b><i>next/check</i></b>
+pool may be able to keep in a single array of integer couples, but the
+<b><i>base</i></b> array does not grow in parallel to the pool, and is therefore
+usually split.</p>
+
+<p>To solve this problem, <a href="Ref_Aoe1989">[Aoe1989]</a> reduced the
+structure into two parallel arrays. In the double-array structure, the
+<b><i>base</i></b> and <b><i>next</i></b> are merged, resulting in only two
+parallel arrays, namely, <b><i>base</i></b> and <b><i>check</i></b>.</p>
+
+<h3>Structure</h3>
+
+<p>Instead of indirectly referencing through <cite>state numbers</cite> as
+in tripple-array trie, nodes in double-array trie are linked directly within
+the <b><i>base/check</i></b> pool.</p>
+
+<div class="definition">
+<p><strong>Definition 2.</strong> For a transition from state <cite>s</cite> to
+<cite>t</cite> which takes character <cite>c</cite> as the input, the condition
+maintained in the double-array trie is:</p>
+<blockquote>
+  <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]
+    = <cite>s</cite><br>
+  <cite>base</cite>[<cite>s</cite>] + <cite>c</cite>
+    = <cite>t</cite>
+</blockquote>
+</div>
+
+<p><img src="double.gif" alt="Double-Array Structure" /></p>
+
+<h3>Walking</h3>
+
+<p>According to <strong>definition 2</strong>, the walking algorithm for a
+given state <cite>s</cite> and the input character <cite>c</cite> is:</p>
+
+<div class="pseudocode">  <cite>t</cite> := <cite>base</cite>[<cite>s</cite>] + <cite>c</cite>;<br>
+  <b><i>if</i></b> <cite>check</cite>[<cite>t</cite>] = <cite>s</cite> <b><i>then</i></b>
+      <cite>next state</cite> := <cite>t</cite>
+  <b><i>else</i></b>
+      <cite>fail</cite>
+  <b><i>endif</i></b>
+</div>
+
+<h3>Construction</h3>
+
+<p>The construction of double-array trie is in principle the same as that of
+tripple-array trie. The difference is the base relocation:</p>
+
+<div class="pseudocode"><b><i>Procedure</i></b> <cite>Relocate</cite>(<cite>s</cite> : <b><i>state</i></b>; <cite>b</cite> : <b><i>base_index</i></b>)
+<span class="comment">{ Move base for state <cite>s</cite> to a new place beginning at <cite>b</cite> }</span>
+<b><i>begin</i></b>
+    <b><i>foreach</i></b> input character <cite>c</cite> for the state <cite>s</cite>
+    <span class="comment">{ i.e. foreach <cite>c</cite> such that <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>]] = <cite>s</cite> }</span>
+    <b><i>begin</i></b>
+        <cite>check</cite>[<cite>b</cite> + <cite>c</cite>] := <cite>s</cite>;     <span class="comment">{ mark owner }</span>
+        <cite>base</cite>[<cite>b</cite> + <cite>c</cite>] := <cite>base</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>];     <span class="comment">{ copy data }</span>
+        <span class="comment">{ the node <cite>base</cite>[<cite>s</cite>] + <cite>c</cite> is to be moved to <cite>b</cite> + <cite>c</cite>;
+          Hence, for any <cite>i</cite> for which <cite>check</cite>[<cite>i</cite>] = <cite>base</cite>[<cite>s</cite>] + <cite>c</cite>, update <cite>check</cite>[<cite>i</cite>] to <cite>b</cite> + <cite>c</cite> }</span>
+        <b><i>foreach</i></b> input character <cite>d</cite> for the node <cite>base</cite>[<cite>s</cite>] + <cite>c</cite>
+        <b><i>begin</i></b>
+            <cite>check</cite>[<cite>base</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>] + <cite>d</cite>] := <cite>b</cite> + <cite>c</cite>
+        <b><i>end</i></b>;
+        <cite>check</cite>[<cite>base</cite>[<cite>s</cite>] + <cite>c</cite>] := <b><i>none</i></b>     <span class="comment">{ free the cell }</span>
+    <b><i>end</i></b>;
+    <cite>base</cite>[<cite>s</cite>] := <cite>b</cite>
+<b><i>end</i></b>
+</div>
+
+<p><img src="doubreloc.gif" alt="Double-Array Relocation" /></p>
+
+<a name="Suffix">
+<h2>Suffix Compression</h2>
+</a>
+
+<p><a href="Ref_Aoe1989">[Aoe1989]</a> also suggested a storage compression
+strategy, by splitting non-branching suffixes into single string storages,
+called <b><i>tail</i></b>, so that the rest non-branching steps are reduced
+into mere string comparison.</p>
+
+<p>With the two separate data structures, double-array branches and 
+suffix-spool tail, key insertion and deletion algorithms must be modified
+accordingly.</p>
+
+<a name="Insert">
+<h2>Key Insertion</h2>
+</a>
+
+<p>To insert a new key, the branching position can be found by traversing the
+trie with the key one by one character until it gets stuck. The state where
+there is no branch to go is the very place to insert a new edge, labeled by
+the failing character. However, with the branch-tail structure, the insertion
+point can be either in the branch or in the tail.</p>
+
+<h3>1. When the branching point is in the double-array structure</h3>
+
+<p>Suppose that the new key is a string
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>a<sub>h</sub>a<sub>h+1</sub>...a<sub>n</sub>,
+where
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>
+traverses the trie from the root to a node s<sub>r</sub> in the double-array
+structure, and there is no edge labeled a<sub>h</sub> that goes out of
+s<sub>r</sub>. The algorithm called <b><i>A_INSERT</i></b> in
+<a href="#Ref_Aoe1989">[Aoe1989]</a> does as follows:
+</p>
+
+<div class="pseudocode">From s<sub>r</sub>, insert edge labeled a<sub>h</sub> to new node s<sub>t</sub>;
+Let s<sub>t</sub> be a separate node poining to a string a<sub>h+1</sub>...a<sub>n</sub> in tail pool.
+</div>
+
+<p><img src="a_insert.gif" alt="A_INSERT algorithm" /></p>
+
+<h3>2. When the branching point is in the tail pool</h3>
+
+<p>Since the path through a tail string has no branch, and therefore corresponds
+to exactly one key, suppose that the key corresponding to the tail is</p>
+
+<p>
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>a<sub>h</sub>...a<sub>h+k-1</sub>b<sub>1</sub>...b<sub>m</sub>,<br>
+<br>
+where
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub> is in double-array structure, and
+a<sub>h</sub>...a<sub>h+k-1</sub>b<sub>1</sub>...b<sub>m</sub> is in tail.
+Suppose that the substring
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub> traverses the trie from the root
+to a node s<sub>r</sub>.
+</p>
+
+<p>And suppose that the new key is in the form</p>
+
+<p>
+a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>a<sub>h</sub>...a<sub>h+k-1</sub>a<sub>h+k</sub>...a<sub>n</sub>,<br>
+<br>
+where a<sub>h+k</sub> &lt;&gt; b<sub>1</sub>. The algorithm called
+<b><i>B_INSERT</i></b> in <a href="#Ref_Aoe1989">[Aoe1989]</a> does as follows:
+</p>
+
+<div class="pseudocode">From s<sub>r</sub>, insert straight path with a<sub>h</sub>...a<sub>h+k-1</sub>, ending at a new node s<sub>t</sub>;
+From s<sub>t</sub>, insert edge labeled b<sub>1</sub> to new node s<sub>u</sub>;
+Let s<sub>u</sub> be separate node pointing to a string b<sub>2</sub>...b<sub>m</sub> in tail pool;
+From s<sub>t</sub>, insert edge labeled a<sub>h+k</sub> to new node s<sub>v</sub>;
+Let s<sub>v</sub> be separate node pointing to a string a<sub>h+k+1</sub>...a<sub>n</sub> in tail pool.
+</div>
+
+<p><img src="b_insert.gif" alt="B_INSERT algorithm" /></p>
+
+<a name="Delete">
+<h2>Key Deletion</h2>
+</a>
+
+<p>To delete a key from the trie, all we need to do is delete the tail block
+occupied by the key, and all double-array nodes belonging exclusively to the 
+key, without touching any node belonging to other keys.</p>
+
+<p>Consider a trie which accepts a language K = {pool#, prepare#, preview#,
+prize#, produce#, producer#, progress#} : </p>
+
+<p><img src="trie2.gif" alt="example trie" /></p>
+
+<p>The key "pool#" can be deleted by removing the tail string "ol#" from the
+tail pool, and node 3 from the double-array structure. This is the simplest
+case.</p>
+
+<p>To remove the key "produce#", it is sufficient to delete node 14 from the
+double-array structure. But the resulting trie will not obay the convention
+that every node in the double-array structure, except the separate nodes which
+point to tail blocks, must belong to more than one key. The path from node 10
+on will belong solely to the key "producer#".</p>
+
+<p>But there is no harm violating this rule. The only drawback is the
+uncompactnesss of the trie. Traversal, insertion and deletion algoritms are
+intact. Therefore, this should be relaxed, for the sake of simplicity and
+efficiency of the deletion algorithm. Otherwise, there must be extra steps
+to examine other keys in the same subtree ("producer#" for the deletion of
+"produce#") if any node needs to be moved from the double-array structure to
+tail pool.</p>
+
+<p>Suppose further that having removed "produce#" as such (by removing only
+node 14), we also need to remove "producer#" from the trie. What we have to do
+is remove string "#" from tail, and remove nodes 15, 13, 12, 11, 10 (which now
+belong solely to the key "producer#") from the double-array structure.</p>
+
+<p>We can thus summarize the algorithm to delete a key
+k = a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>a<sub>h</sub>...a<sub>n</sub>,
+where a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub> is in double-array structure,
+and a<sub>h</sub>...a<sub>n</sub> is in tail pool, as follows : </p>
+
+<div class="pseudocode">Let <cite>s<sub>r</sub></cite> := the node reached by a<sub>1</sub>a<sub>2</sub>...a<sub>h-1</sub>;
+Delete a<sub>h</sub>...a<sub>n</sub> from tail;
+<cite>s</cite> := <cite>s<sub>r</sub></cite>;
+<b><i>repeat</i></b>
+    <cite>p</cite> := parent of <cite>s</cite>;
+    Delete node <cite>s</cite> from double-array structure;
+    <cite>s</cite> := <cite>p</cite>
+<b><i>until</i></b> <cite>s</cite> = root <b><i>or</i></b> <cite>outdegree</cite>(<cite>s</cite>) &gt; 0.
+</div>
+
+<p>Where <cite>outdegree</cite>(<cite>s</cite>) is the number of children nodes
+of <cite>s</cite>.
+
+<a name="Alloc">
+<h2>Double-Array Pool Allocation</h2>
+</a>
+
+<p>When inserting a new branch for a node, it is possible that the array element
+for the new branch has already been allocated to another node. In that case,
+relocation is needed. The efficiency-critical part then turns out to be the
+search for a new place. A brute force algoritm iterates along the
+<cite>check</cite> array to find an empty cell to place the first branch, and
+then assure that there are empty cells for all other branches as well.
+The time used is therefore proportional to the size of the double-array pool
+and the size of the alphabet.</p>
+
+<p>Suppose that there are <cite>n</cite> nodes in the trie, and the alphabet is
+of size <cite>m</cite>. The size of the double-array structure would be
+<cite>n</cite> + <cite>cm</cite>, where <cite>c</cite> is a coefficient which
+is dependent on the characteristic of the trie. And the time complexity of
+the brute force algorithm would be
+O(<cite>nm</cite> + <cite>cm<sup>2</sup></cite>).</p>
+
+<p><a href="#Ref_Aoe1989">[Aoe1989]</a> proposed a free-space list in the
+double-array structure to make the time complexity independent of the size
+of the trie, but dependent on the number of the free cells only. The 
+<cite>check</cite> array for the free cells are redefined to keep a pointer
+to the next free cell (called G-link) : </p>
+
+<div class="definition">
+<p><strong>Definition 3.</strong> Let r<sub>1</sub>, r<sub>2</sub>, ... ,
+r<sub>cm</sub> be the free cells in the double-array structure, ordered
+by position. G-link is defined as follows :
+<blockquote>
+  <cite>check</cite>[0] = -r<sub>1</sub><br>
+  <cite>check</cite>[r<sub>i</sub>] = -r<sub>i+1</sub>
+    ; 1 &lt;= i &lt;= cm-1<br>
+  <cite>check</cite>[r<sub>cm</sub>] = -1
+</blockquote>
+</div>
+
+<p>By this definition, negative <cite>check</cite> means unoccupied in the same
+sense as that for "none" <cite>check</cite> in the ordinary algorithm. This
+encoding scheme forms a singly-linked list of free cells. When searching for an
+empty cell, only <cite>cm</cite> free cells are visited, instead of all
+<cite>n</cite> + <cite>cm</cite> cells as in the brute force algorithm.</p>
+
+<p>This, however, can still be improved. Notice that for those cells with
+negative <cite>check</cite>, the corresponding <cite>base</cite>'s are not
+given any definition. Therefore, in our implementation, Aoe's G-link is
+modified to be doubly-linked list by letting <cite>base</cite> of every free
+cell points to a previous free cell. This can speed up the insertion and
+deletion processes. And, for convenience in referencing the list head and tail,
+we let the list be circular. The zeroth node is dedicated to be the entry point
+of the list. And the root node of the trie will begin with cell number one.</p>
+
+<div class="definition">
+<p><strong>Definition 4.</strong> Let r<sub>1</sub>, r<sub>2</sub>, ... ,
+r<sub>cm</sub> be the free cells in the double-array structure, ordered
+by position. G-link is defined as follows :
+<blockquote>
+  <cite>check</cite>[0] = -r<sub>1</sub><br>
+  <cite>check</cite>[r<sub>i</sub>] = -r<sub>i+1</sub>
+    ; 1 &lt;= i &lt;= cm-1<br>
+  <cite>check</cite>[r<sub>cm</sub>] = 0<br>
+  <cite>base</cite>[0] = -r<sub>cm</sub><br>
+  <cite>base</cite>[r<sub>1</sub>] = 0<br>
+  <cite>base</cite>[r<sub>i+1</sub>] = -r<sub>i</sub>
+    ; 1 &lt;= i &lt;= cm-1
+</blockquote>
+</div>
+
+<p>Then, the searching for the slots for a node with input symbol set
+P = {c<sub>1</sub>, c<sub>2</sub>, ..., c<sub>p</sub>} needs to iterate only
+the cells with negative <cite>check</cite> : </p>
+
+<div class="pseudocode"><span class="comment">{find least free cell s such that s &gt; c<sub>1</sub>}</span>
+s := -<cite>check</cite>[0];
+<b><i>while</i></b> s &lt;&gt; 0 <b><i>and</i></b> s &lt;= c<sub>1</sub> <b><i>do</i></b>
+    s := -<cite>check</cite>[s]
+<b><i>end</i></b>;
+<b><i>if</i></b> s = 0 <b><i>then</i></b> <b><i>return</i></b> <i>FAIL</i>;  <span class="comment">{or reserve some additional space}</span>
+
+<span class="comment">{continue searching for the row, given that s matches c<sub>1</sub>}</span>
+<b><i>while</i></b> s &lt;&gt; 0 <b><i>do</i></b>
+    i := 2;
+    <b><i>while</i></b> i &lt;= p <b><i>and</i></b> <cite>check</cite>[s + c<sub>i</sub> - c<sub>1</sub>] &lt; 0 <b><i>do</i></b>
+        i := i + 1
+    <b><i>end</i></b>;
+    <b><i>if</i></b> i = p + 1 <b><i>then</i></b> <b><i>return</i></b> s - c<sub>1</sub>;  <span class="comment">{all cells required are free, so return it}</span>
+    s := -<cite>check</cite>[s]
+<b><i>end</i></b>;
+<b><i>return</i></b> <cite>FAIL</cite>;  <span class="comment">{or reserve some additional space}</span>
+</div>
+
+<p>The time complexity for free slot searching is reduced to
+O(<cite>cm<sup>2</sup></cite>). The relocation stage takes 
+O(<cite>m<sup>2</sup></cite>). The total time complexity is therefore
+O(<cite>cm<sup>2</sup></cite> + <cite>m<sup>2</sup></cite>) = 
+O(<cite>cm<sup>2</sup></cite>).</p>
+
+<p>It is useful to keep the free list ordered by position, so that the access
+through the array becomes more sequential. This would be beneficial when the
+trie is stored in a disk file or virtual memory, because the disk caching or
+page swapping would be used more efficiently. So, the free cell reusing
+should maintain this strategy :</p>
+
+<div class="pseudocode">t := -<cite>check</cite>[0];
+<b><i>while</i></b> <cite>check</cite>[t] &lt;&gt; 0 <b><i>and</i></b> t &lt; s <b><i>do</i></b>
+    t := -<cite>check</cite>[t]
+<b><i>end</i></b>;
+<span class="comment">{t now points to the cell after s' place}</span>
+<cite>check</cite>[s] := -t;
+<cite>check</cite>[-<cite>base</cite>[t]] := -s;
+<cite>base</cite>[s] := <cite>base</cite>[t];
+<cite>base</cite>[t] := -s;
+</div>
+
+<p>Time complexity of freeing a cell is thus O(<cite>cm</cite>).</p>
+
+<a name="AnImp">
+<h2>An Implementation</h2>
+</a>
+
+<p>In my implementation, I designed the API with persistent data in mind.
+Tries can be saved to disk and loaded for use afterward. And in newer versions,
+non-persistent usage is also possible. You can create a trie in memory, 
+populate data to it, use it, and free it, without any disk I/O. Alternatively
+you can load a trie from disk and save it to disk whenever you want.</p>
+
+<p>The trie data is portable across platforms. The byte order in the disk is
+always little-endian, and is read correctly on either little-endian or 
+big-endian systems.</p>
+
+<p>Trie index is 32-bit signed integer. This allows 2,147,483,646 
+(2<sup>31</sup> - 2) total nodes in the trie data, which should be sufficient
+for most problem domains. And each data entry can store a 32-bit integer value
+associated to it. This value can be used for any purpose, up to your needs.
+If you don't need to use it, just store some dummy value.</p>
+
+<p>For sparse data compactness, the trie alphabet set should be continuous,
+but that is usually not the case in general character sets.  Therefore, a map
+between the input character and the low-level alphabet set for the trie is
+created in the middle. You will have to define your input character set by
+listing their continuous ranges of character codes in a .abm (alphabet map)
+file when creating a trie. Then, each character will be automatically assigned
+internal codes of continuous values.</p>
+      </div>
+      <hr>
+      <h3>
+        <table border="0">
+          <tr>
+            <td><a href="reprint.html">返回上一页</a></td>
+            <td><a href="index.html">返回首页</a></td>
+          </tr>
+        </table>
+      </h3>
+      <footer class="site-footer">
+        <span class="site-footer-credits">Copyright &copy; 2018 by <a href="https://github.com/lpeng22t">lpeng22t</a> All rights reserved.</span>
+      </footer>
+     </section>
+  </body>
+</html>
