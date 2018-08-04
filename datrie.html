@@ -19,7 +19,7 @@
         <h2>目录</h2>
         <ol>
           <li> <a href="#What">什么是Trie?</a>
-          <li> <a href="#WhatTake">What Does It Take to Implement a Trie?</a>
+          <li> <a href="#WhatTake">实现Trie需要什么？</a>
           <li> <a href="#Tripple">Tripple-Array Trie</a>
           <li> <a href="#Double">Double-Array Trie</a>
           <li> <a href="#Suffix">Suffix Compression</a>
@@ -27,23 +27,19 @@
           <li> <a href="#Delete">Key Deletion</a>
           <li> <a href="#Alloc">Double-Array Pool Allocation</a>
           <li> <a href="#AnImp">An Implementation</a>
+          <li> <a href="#References">References</a>
         </ol>
-<a name="What">
-<h2>What is Trie?</h2>
-</a>
 
-<p><strong>Trie</strong> is a kind of digital search tree. (See
-<a href="#Ref_Knuth1972">[Knuth1972]</a> for the detail of digital search tree.)
-<a href="#Ref_Fredkin1960">[Fredkin1960]</a> introduced the <cite>trie</cite>
-terminology, which is abbreviated from "Re<i>trie</i>val".</p>
-
-<p><img src="trie1.gif" alt="Trie Example"></p>
-
-<p>Trie is an efficient indexing method. It is indeed also a kind of
-deterministic finite automaton (DFA) (See <a href="#Ref_Cohen">[Cohen1990]</a>,
-for example, for the definition of DFA). Within the tree structure, each node
-corresponds to a DFA state, each (directed) labeled edge from a parent node to
-a child node corresponds to a DFA transition. The traversal starts at the root
+        <a name="What">
+          <h3>What is Trie?</h3>
+        </a>
+        <p><strong>Trie</strong>是一种数字查找树。
+（关于数字查找树的详细信息参见<a href="#Ref_Knuth1972">[Knuth1972]</a>。）
+<a href="#Ref_Fredkin1960">[Fredkin1960]</a>引进了术语<cite>trie</cite>，
+它是"Re<i>trie</i>val"的缩写。</p>
+        <p>Trie是一种有效的索引方法。它也是一种确定性有限状态机(DFA) 
+(DFA的定义示例参见<a href="#Ref_Cohen">[Cohen1990]</a>)。在树结构中，每个结点表示一个DFA状态，
+每个从父结点到子结点（有向的）带标签的边缘表示一个DFA转移。 The traversal starts at the root
 node. Then, from head to tail, one by one character in the key string is taken
 to determine the next state to go. The edge labeled with the same character is
 chosen to walk. Notice that each step of such walking consumes one character
@@ -536,6 +532,37 @@ created in the middle. You will have to define your input character set by
 listing their continuous ranges of character codes in a .abm (alphabet map)
 file when creating a trie. Then, each character will be automatically assigned
 internal codes of continuous values.</p>
+<a name="References">
+<h2>References</h2>
+</a>
+
+<ol>
+  <li> <a name="Ref_Knuth1972"><strong>[Knuth1972]</strong>
+       Knuth, D. E. <strong>The Art of Computer Programming Vol. 3, Sorting and
+       Searching.</strong> Addison-Wesley. 1972.</a>
+  <li> <a name="Ref_Fredkin1960"><strong>[Fredkin1960]</strong>
+       Fredkin, E. <cite>Trie Memory.</cite> <strong>Communication of the
+       ACM.</strong> Vol. 3:9 (Sep 1960). pp. 490-499.</a>
+  <li> <a name="Ref_Cohen1990"><strong>[Cohen1990]</strong>
+       Cohen, D. <strong>Introduction to Theory of Computing.</strong> John
+       Wiley &amp; Sons. 1990.</a>
+  <li> <a name="Ref_Johnson1975"><strong>[Johnson1975]</strong>
+       Johnson, S. C. <strong>YACC-Yet another compiler-compiler.</strong>
+       Bell Lab. NJ. Computing Science Technical Report 32. pp.1-34. 1975.</a>
+  <li> <a name="Ref_Aho+1985"><strong>[Aho+1985]</strong>
+       Aho, A. V., Sethi, R., Ullman, J. D. <strong>Compilers : Principles,
+       Techniques, and Tools.</strong> Addison-Wesley. 1985.
+  <li> <a name="Ref_Aoe1989"><strong>[Aoe1989]</strong>
+       Aoe, J. <cite>An Efficient Digital Search Algorithm by Using a
+       Double-Array Structure.</cite> <strong>IEEE Transactions on Software
+       Engineering.</strong> Vol. 15, 9 (Sep 1989). pp. 1066-1077.
+  <li> <a name="Ref_Virach1993"><strong>[Virach+1993]</strong>
+       Virach Sornlertlamvanich, Apichit Pittayaratsophon, Kriangchai
+       Chansaenwilai. <cite>Thai Dictionary Data Base Manipulation using
+       Multi-indexed Double Array Trie.</cite> <strong>5th Annual
+       Conference.</strong> National Electronics and Computer
+       Technology Center. Bangkok. 1993. pp 197-206. (in Thai)
+</ol>
       </div>
       <hr>
       <h3>
